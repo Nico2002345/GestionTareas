@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskMaster Pro - Gestión Gamificada de Tareas</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Pantalla de Login/Registro -->
+    <div class="auth-container" id="authContainer">
+        <div class="auth-box">
+            <div class="auth-logo">
+                <h1>🎮 TaskMaster Pro</h1>
+                <p>Tu gestor de tareas gamificado</p>
+            </div>
+
+            <!-- Formulario de Login -->
+            <div class="auth-form" id="loginForm">
+                <h2>Iniciar Sesión</h2>
+                <form onsubmit="login(); return false;">
+                    <div class="form-group">
+                        <label>📧 Correo Electrónico</label>
+                        <input type="email" id="loginEmail" class="auth-input" placeholder="tu@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>🔒 Contraseña</label>
+                        <input type="password" id="loginPassword" class="auth-input" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn-auth">Entrar</button>
+                </form>
+                <p class="auth-switch">
+                    ¿No tienes cuenta? <a href="#" onclick="showRegister(); return false;">Regístrate aquí</a>
+                </p>
+            </div>
+
+            <!-- Formulario de Registro -->
+            <div class="auth-form hidden" id="registerForm">
+                <h2>Crear Cuenta</h2>
+                <form onsubmit="register(); return false;">
+                    <div class="form-group">
+                        <label>👤 Nombre</label>
+                        <input type="text" id="registerName" class="auth-input" placeholder="Tu nombre" required>
+                    </div>
+                    <div class="form-group">
+                        <label>📧 Correo Electrónico</label>
+                        <input type="email" id="registerEmail" class="auth-input" placeholder="tu@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>🔒 Contraseña</label>
+                        <input type="password" id="registerPassword" class="auth-input" placeholder="Mínimo 6 caracteres" required>
+                    </div>
+                    <div class="form-group">
+                        <label>🔒 Confirmar Contraseña</label>
+                        <input type="password" id="registerConfirmPassword" class="auth-input" placeholder="Repite tu contraseña" required>
+                    </div>
+                    <button type="submit" class="btn-auth">Crear Cuenta</button>
+                </form>
+                <p class="auth-switch">
+                    ¿Ya tienes cuenta? <a href="#" onclick="showLogin(); return false;">Inicia sesión aquí</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" id="mainApp" style="display: none;">
+        <!-- Header con perfil de usuario -->
+        <header class="header">
+            <div class="logo">
+                <h1>🎮 TaskMaster Pro</h1>
+            </div>
+            <div class="user-profile">
+                <div class="user-info">
+                    <span class="user-email" id="userEmail">usuario@email.com</span>
+                </div>
+                <div class="user-stats">
+                    <div class="stat">
+                        <span class="stat-label">Nivel</span>
+                        <span class="stat-value" id="userLevel">1</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">XP</span>
+                        <span class="stat-value" id="userXP">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Racha</span>
+                        <span class="stat-value" id="userStreak">0🔥</span>
+                    </div>
+                </div>
+                <button class="theme-toggle" id="themeToggle">🌙</button>
+                <button class="logout-btn" id="logoutBtn" onclick="logout()">🚪 Salir</button>
+            </div>
+        </header>
+
+        <!-- Barra de progreso de nivel -->
+        <div class="level-progress">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <span class="progress-text" id="progressText">0 / 100 XP</span>
+        </div>
+
+        <!-- Panel de navegación -->
+        <nav class="nav-tabs">
+            <button class="tab-btn active" data-tab="tasks">📋 Tareas</button>
+            <button class="tab-btn" data-tab="pomodoro">⏱️ Pomodoro</button>
+            <button class="tab-btn" data-tab="stats">📊 Estadísticas</button>
+            <button class="tab-btn" data-tab="achievements">🏆 Logros</button>
+        </nav>
+
+        <!-- Contenedor principal -->
+        <main class="main-content">
+            <!-- Panel de Tareas -->
+            <div class="tab-content active" id="tasks-panel">
+                <div class="task-input-section">
+                    <input type="text" id="taskInput" placeholder="¿Qué necesitas hacer?" class="task-input">
+                    <select id="taskCategory" class="category-select">
+                        <option value="trabajo">💼 Trabajo</option>
+                        <option value="personal">🏠 Personal</option>
+                        <option value="estudio">📚 Estudio</option>
+                        <option value="salud">💪 Salud</option>
+                        <option value="compras">🛒 Compras</option>
+                    </select>
+                    <select id="taskPriority" class="priority-select">
+                        <option value="baja">⬇️ Baja</option>
+                        <option value="media">➡️ Media</option>
+                        <option value="alta">⬆️ Alta</option>
+                    </select>
+                    <button id="addTaskBtn" class="btn-primary">➕ Agregar</button>
+                </div>
+
+                <!-- Filtros -->
+                <div class="filters">
+                    <button class="filter-btn active" data-filter="todas">Todas</button>
+                    <button class="filter-btn" data-filter="activas">Activas</button>
+                    <button class="filter-btn" data-filter="completadas">Completadas</button>
+                    <button class="filter-btn" data-filter="alta">Alta Prioridad</button>
+                </div>
+
+                <!-- Lista de tareas -->
+                <div class="tasks-container" id="tasksList"></div>
+            </div>
+
+            <!-- Panel de Pomodoro -->
+            <div class="tab-content" id="pomodoro-panel">
+                <div class="pomodoro-container">
+                    <h2>Temporizador Pomodoro</h2>
+                    <div class="pomodoro-timer">
+                        <div class="timer-display" id="timerDisplay">25:00</div>
+                        <div class="timer-mode" id="timerMode">Trabajo</div>
+                    </div>
+                    <div class="pomodoro-controls">
+                        <button id="startTimer" class="btn-primary">▶️ Iniciar</button>
+                        <button id="pauseTimer" class="btn-secondary">⏸️ Pausar</button>
+                        <button id="resetTimer" class="btn-secondary">🔄 Reiniciar</button>
+                    </div>
+                    <div class="pomodoro-settings">
+                        <label>
+                            Trabajo: <input type="number" id="workDuration" value="25" min="1" max="60"> min
+                        </label>
+                        <label>
+                            Descanso: <input type="number" id="breakDuration" value="5" min="1" max="30"> min
+                        </label>
+                    </div>
+                    <div class="pomodoro-count">
+                        Pomodoros completados hoy: <span id="pomodoroCount">0</span> 🍅
+                    </div>
+                    <div class="current-task-pomodoro">
+                        <h3>Trabajando en:</h3>
+                        <select id="pomodoroTaskSelect" class="task-select">
+                            <option value="">Selecciona una tarea...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel de Estadísticas -->
+            <div class="tab-content" id="stats-panel">
+                <div class="stats-container">
+                    <h2>📊 Tus Estadísticas</h2>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>Tareas Completadas</h3>
+                            <p class="big-number" id="totalCompleted">0</p>
+                            <p class="stat-detail">Total histórico</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Racha Actual</h3>
+                            <p class="big-number" id="currentStreak">0</p>
+                            <p class="stat-detail">días consecutivos</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Productividad</h3>
+                            <p class="big-number" id="productivityScore">0%</p>
+                            <p class="stat-detail">esta semana</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Mejor Racha</h3>
+                            <p class="big-number" id="bestStreak">0</p>
+                            <p class="stat-detail">días</p>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Tareas por Categoría</h3>
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Actividad Semanal</h3>
+                        <canvas id="weeklyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel de Logros -->
+            <div class="tab-content" id="achievements-panel">
+                <div class="achievements-container">
+                    <h2>🏆 Logros Desbloqueados</h2>
+                    <div class="achievements-grid" id="achievementsList"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notificaciones -->
+    <div class="notification" id="notification"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
