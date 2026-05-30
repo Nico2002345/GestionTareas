@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Parent compatible con AppCompatActivity y Material Design -->
+    <style name="Theme.GestionTareas" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <!-- Colores principales -->
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorPrimaryDark">@color/purple_700</item>
+        <item name="colorAccent">@color/teal_200</item>
+
+        <!-- Colores de fondo y superficies -->
+        <item name="android:statusBarColor" tools:targetApi="l" xmlns:tools="http://schemas.android.com/tools">?attr/colorPrimaryDark</item>
+
+        <!-- Compatibilidad obligatoria para AppCompatActivity -->
+        <item name="windowActionBar">true</item>
+        <item name="windowNoTitle">false</item>
+    </style>
+</resources>
