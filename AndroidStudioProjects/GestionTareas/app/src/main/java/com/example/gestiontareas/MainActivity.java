@@ -1,6 +1,7 @@
 package com.example.gestiontareas;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
@@ -9,7 +10,7 @@ import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
-import android.view.View;
+import android.os.Handler;
 import android.widget.Button;
 import android.widget.DatePicker;
 import android.widget.EditText;
@@ -45,6 +46,11 @@ public class MainActivity extends AppCompatActivity {
     private String fechaSeleccionada = "";
     private String horaSeleccionada = "";
 
+    private Handler handler = new Handler();
+
+    private int tareaActivaIndex = -1;
+    private Runnable cronometroRunnable;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -71,41 +77,105 @@ public class MainActivity extends AppCompatActivity {
         cargarTareas();
 
         btnAgregar.setOnClickListener(v -> agregarTarea());
-
         btnSeleccionarFecha.setOnClickListener(v -> mostrarDatePicker());
-
         btnSeleccionarHora.setOnClickListener(v -> mostrarTimePicker());
     }
 
     private void cargarTareas() {
+
         listaTareas = database.obtenerTareas();
 
         adapter = new TareaAdapter(listaTareas);
 
-        recyclerView.setLayoutManager(
-                new LinearLayoutManager(this)
-        );
-
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
 
-        adapter.setOnItemClickListener(
-                new TareaAdapter.OnItemClickListener() {
+        adapter.setOnItemClickListener(new TareaAdapter.OnItemClickListener() {
 
-                    @Override
-                    public void onDeleteClick(int position) {
-                        eliminarTarea(position);
-                    }
+            @Override
+            public void onDeleteClick(int position) {
+                eliminarTarea(position);
+            }
 
-                    @Override
-                    public void onChangeStatusClick(int position) {
-                        cambiarEstadoTarea(position);
-                    }
+            @Override
+            public void onChangeStatusClick(int position) {
+                cambiarEstadoTarea(position);
+            }
 
-                    @Override
-                    public void onCronometroClick(int position) {
+            @Override
+            public void onCronometroClick(int position) {
+                iniciarPausarCronometro(position);
+            }
+        });
+    }
 
-                    }
-                });
+    private void iniciarPausarCronometro(int position) {
+
+        Tarea tarea = listaTareas.get(position);
+
+        if (tarea.isCronometroActivo()) {
+
+            tarea.setCronometroActivo(false);
+
+            handler.removeCallbacks(cronometroRunnable);
+
+            database.actualizarTiempoTarea(
+                    tarea.getId(),
+                    tarea.getTiempoInvertido(),
+                    0
+            );
+
+            Toast.makeText(this, "Cronómetro pausado", Toast.LENGTH_SHORT).show();
+
+        } else {
+
+            detenerCronometrosActivos();
+
+            tareaActivaIndex = position;
+            tarea.setCronometroActivo(true);
+
+            cronometroRunnable = new Runnable() {
+                @Override
+                public void run() {
+
+                    Tarea t = listaTareas.get(tareaActivaIndex);
+
+                    long nuevoTiempo = t.getTiempoInvertido() + 1000;
+                    t.setTiempoInvertido(nuevoTiempo);
+
+                    database.actualizarTiempoTarea(
+                            t.getId(),
+                            nuevoTiempo,
+                            1
+                    );
+
+                    adapter.notifyItemChanged(tareaActivaIndex);
+
+                    handler.postDelayed(this, 1000);
+                }
+            };
+
+            handler.post(cronometroRunnable);
+
+            Toast.makeText(this, "Cronómetro iniciado", Toast.LENGTH_SHORT).show();
+        }
+
+        adapter.notifyItemChanged(position);
+    }
+
+    private void detenerCronometrosActivos() {
+        handler.removeCallbacksAndMessages(null);
+
+        for (Tarea t : listaTareas) {
+            if (t.isCronometroActivo()) {
+                t.setCronometroActivo(false);
+                database.actualizarTiempoTarea(
+                        t.getId(),
+                        t.getTiempoInvertido(),
+                        0
+                );
+            }
+        }
     }
 
     private void agregarTarea() {
@@ -114,42 +184,21 @@ public class MainActivity extends AppCompatActivity {
         String descripcion = etDescripcion.getText().toString().trim();
 
         if (titulo.isEmpty()) {
-            Toast.makeText(
-                    this,
-                    "Por favor ingrese un título",
-                    Toast.LENGTH_SHORT
-            ).show();
+            Toast.makeText(this, "Por favor ingrese un título", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        String fecha = fechaSeleccionada.isEmpty()
-                ? "Sin fecha"
-                : fechaSeleccionada;
-
-        String hora = horaSeleccionada.isEmpty()
-                ? "Sin hora"
-                : horaSeleccionada;
-
         Tarea nuevaTarea = new Tarea();
-
         nuevaTarea.setTitulo(titulo);
         nuevaTarea.setDescripcion(descripcion);
         nuevaTarea.setEstado(Tarea.ESTADO_CREADA);
-        nuevaTarea.setFecha(fecha);
-        nuevaTarea.setHora(hora);
+        nuevaTarea.setFecha(fechaSeleccionada.isEmpty() ? "Sin fecha" : fechaSeleccionada);
+        nuevaTarea.setHora(horaSeleccionada.isEmpty() ? "Sin hora" : horaSeleccionada);
+        nuevaTarea.setTiempoInvertido(0);
+        nuevaTarea.setCronometroActivo(false);
 
         database.insertarTarea(nuevaTarea);
-
-        if (!fecha.equals("Sin fecha") &&
-                !hora.equals("Sin hora")) {
-
-            programarRecordatorio(
-                    titulo,
-                    descripcion,
-                    fecha,
-                    hora
-            );
-        }
+        programarNotificacion(nuevaTarea);
 
         etTitulo.setText("");
         etDescripcion.setText("");
@@ -157,77 +206,9 @@ public class MainActivity extends AppCompatActivity {
         fechaSeleccionada = "";
         horaSeleccionada = "";
 
-        tvFechaSeleccionada.setText(
-                "Fecha: No seleccionada"
-        );
-
-        tvHoraSeleccionada.setText(
-                "Hora: No seleccionada"
-        );
-
         actualizarLista();
 
-        Toast.makeText(
-                this,
-                "Tarea agregada exitosamente",
-                Toast.LENGTH_SHORT
-        ).show();
-    }
-
-    private void programarRecordatorio(
-            String titulo,
-            String descripcion,
-            String fecha,
-            String hora) {
-
-        try {
-
-            SimpleDateFormat formato =
-                    new SimpleDateFormat(
-                            "dd/MM/yyyy HH:mm",
-                            Locale.getDefault());
-
-            Date fechaHora =
-                    formato.parse(fecha + " " + hora);
-
-            if (fechaHora == null) return;
-
-            long tiempoRecordatorio =
-                    fechaHora.getTime()
-                            - (15 * 60 * 1000);
-
-            Intent intent =
-                    new Intent(
-                            this,
-                            TareaReceiver.class);
-
-            intent.putExtra("titulo", titulo);
-            intent.putExtra("descripcion", descripcion);
-
-            PendingIntent pendingIntent =
-                    PendingIntent.getBroadcast(
-                            this,
-                            (int) System.currentTimeMillis(),
-                            intent,
-                            PendingIntent.FLAG_UPDATE_CURRENT
-                                    | PendingIntent.FLAG_IMMUTABLE
-                    );
-
-            AlarmManager alarmManager =
-                    (AlarmManager) getSystemService(ALARM_SERVICE);
-
-            if (alarmManager != null) {
-
-                alarmManager.setExact(
-                        AlarmManager.RTC_WAKEUP,
-                        tiempoRecordatorio,
-                        pendingIntent
-                );
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        Toast.makeText(this, "Tarea agregada", Toast.LENGTH_SHORT).show();
     }
 
     private void eliminarTarea(int position) {
@@ -242,150 +223,115 @@ public class MainActivity extends AppCompatActivity {
         adapter.notifyDataSetChanged();
     }
 
+    private void cambiarEstadoTarea(int position) {
+
+        Tarea tarea = listaTareas.get(position);
+
+        String nuevoEstado;
+
+        if (tarea.getEstado().equals(Tarea.ESTADO_CREADA)) {
+            nuevoEstado = Tarea.ESTADO_PENDIENTE;
+        } else if (tarea.getEstado().equals(Tarea.ESTADO_PENDIENTE)) {
+            nuevoEstado = Tarea.ESTADO_REALIZADA;
+        } else {
+            nuevoEstado = Tarea.ESTADO_CREADA;
+        }
+
+        database.actualizarEstadoTarea(tarea.getId(), nuevoEstado);
+        actualizarLista();
+
+        Toast.makeText(this, "Estado actualizado", Toast.LENGTH_SHORT).show();
+    }
+
+    @SuppressLint("ScheduleExactAlarm")
+    private void programarNotificacion(Tarea tarea) {
+        if (tarea.getFecha().equals("Sin fecha") || tarea.getHora().equals("Sin hora")) return;
+
+        try {
+            String[] partesFecha = tarea.getFecha().split("/");
+            String[] partesHora = tarea.getHora().split(":");
+
+            int dia = Integer.parseInt(partesFecha[0]);
+            int mes = Integer.parseInt(partesFecha[1]) - 1;
+            int anio = Integer.parseInt(partesFecha[2]);
+            int hora = Integer.parseInt(partesHora[0]);
+            int minuto = Integer.parseInt(partesHora[1]);
+
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(anio, mes, dia, hora, minuto, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+
+            if (calendar.getTimeInMillis() <= System.currentTimeMillis()) {
+                Toast.makeText(this, "La fecha/hora ya pasó, no se programó recordatorio", Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            Intent intent = new Intent(this, TareaReceiver.class);
+            intent.putExtra("titulo", tarea.getTitulo());
+            intent.putExtra("descripcion", tarea.getDescripcion());
+
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                    this,
+                    (int) System.currentTimeMillis(),
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+
+            AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                Toast.makeText(this, "Permiso de alarmas exactas no concedido. Ve a Ajustes > Aplicaciones.", Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.getTimeInMillis(),
+                    pendingIntent
+            );
+
+            Toast.makeText(this, "Recordatorio programado para " + tarea.getFecha() + " " + tarea.getHora(), Toast.LENGTH_SHORT).show();
+
+        } catch (Exception e) {
+            Toast.makeText(this, "Error al programar recordatorio", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void mostrarDatePicker() {
 
-        Calendar calendar =
-                Calendar.getInstance();
+        Calendar calendar = Calendar.getInstance();
 
-        int year =
-                calendar.get(Calendar.YEAR);
+        new DatePickerDialog(this, (DatePicker view, int year, int month, int day) -> {
 
-        int month =
-                calendar.get(Calendar.MONTH);
+            fechaSeleccionada = String.format(
+                    Locale.getDefault(),
+                    "%02d/%02d/%d",
+                    day, month + 1, year
+            );
 
-        int day =
-                calendar.get(Calendar.DAY_OF_MONTH);
+            tvFechaSeleccionada.setText("Fecha: " + fechaSeleccionada);
 
-        DatePickerDialog datePickerDialog =
-                new DatePickerDialog(
-                        this,
-                        (view, year1, month1, dayOfMonth) -> {
-
-                            fechaSeleccionada =
-                                    String.format(
-                                            Locale.getDefault(),
-                                            "%02d/%02d/%d",
-                                            dayOfMonth,
-                                            month1 + 1,
-                                            year1);
-
-                            tvFechaSeleccionada.setText(
-                                    "Fecha: "
-                                            + fechaSeleccionada
-                            );
-                        },
-                        year,
-                        month,
-                        day
-                );
-
-        datePickerDialog.show();
+        }, calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)).show();
     }
 
     private void mostrarTimePicker() {
 
-        Calendar calendar =
-                Calendar.getInstance();
+        Calendar calendar = Calendar.getInstance();
 
-        int hour =
-                calendar.get(Calendar.HOUR_OF_DAY);
+        new TimePickerDialog(this, (TimePicker view, int hour, int minute) -> {
 
-        int minute =
-                calendar.get(Calendar.MINUTE);
+            horaSeleccionada = String.format(
+                    Locale.getDefault(),
+                    "%02d:%02d",
+                    hour, minute
+            );
 
-        TimePickerDialog timePickerDialog =
-                new TimePickerDialog(
-                        this,
-                        (view, hourOfDay, minute1) -> {
+            tvHoraSeleccionada.setText("Hora: " + horaSeleccionada);
 
-                            horaSeleccionada =
-                                    String.format(
-                                            Locale.getDefault(),
-                                            "%02d:%02d",
-                                            hourOfDay,
-                                            minute1
-                                    );
-
-                            tvHoraSeleccionada.setText(
-                                    "Hora: "
-                                            + horaSeleccionada
-                            );
-                        },
-                        hour,
-                        minute,
-                        true
-                );
-
-        timePickerDialog.show();
-    }
-
-    private void cambiarEstadoTarea(int position) {
-
-        Tarea tarea =
-                listaTareas.get(position);
-
-        String estadoActual =
-                tarea.getEstado();
-
-        String[] opciones;
-
-        if (estadoActual.equals(
-                Tarea.ESTADO_CREADA)) {
-
-            opciones = new String[]{
-                    Tarea.ESTADO_PENDIENTE,
-                    Tarea.ESTADO_REALIZADA
-            };
-
-        } else if (estadoActual.equals(
-                Tarea.ESTADO_PENDIENTE)) {
-
-            opciones = new String[]{
-                    Tarea.ESTADO_REALIZADA,
-                    Tarea.ESTADO_CREADA
-            };
-
-        } else {
-
-            opciones = new String[]{
-                    Tarea.ESTADO_CREADA,
-                    Tarea.ESTADO_PENDIENTE
-            };
-        }
-
-        AlertDialog.Builder builder =
-                new AlertDialog.Builder(this);
-
-        builder.setTitle(
-                "Cambiar estado de: "
-                        + tarea.getTitulo());
-
-        builder.setItems(
-                opciones,
-                (dialog, which) -> {
-
-                    String nuevoEstado =
-                            opciones[which];
-
-                    database.actualizarEstadoTarea(
-                            tarea.getId(),
-                            nuevoEstado);
-
-                    actualizarLista();
-
-                    Toast.makeText(
-                            MainActivity.this,
-                            "Estado actualizado a: "
-                                    + nuevoEstado,
-                            Toast.LENGTH_SHORT
-                    ).show();
-                });
-
-        builder.setNegativeButton(
-                "Cancelar",
-                null
-        );
-
-        builder.show();
+        }, calendar.get(Calendar.HOUR_OF_DAY),
+                calendar.get(Calendar.MINUTE),
+                true).show();
     }
 }
